@@ -6,6 +6,7 @@ Tests:
 3. Check angle conversion formula
 4. Verify CSV export with metadata
 5. Test exponential fitting with β extraction
+6. Live tracking with webcam/video and real data capture
 """
 
 import sys
@@ -15,9 +16,18 @@ import pandas as pd
 from scipy.signal import find_peaks, savgol_filter
 from scipy.optimize import curve_fit
 import math
+import cv2
+import argparse
+from datetime import datetime
 
 print("=" * 70)
 print("PENDULUM TRACKING PIPELINE - INTEGRATION TEST")
+print("=" * 70)
+print("\nModos disponibles:")
+print("  1. Tests de validación (por defecto)")
+print("  2. Live tracking con webcam")
+print("  3. Procesar video existente")
+print("\nUso: python test_integration.py --mode [validate|live|video] [--video VIDEO_PATH]")
 print("=" * 70)
 
 # Test 1: Import modules
@@ -68,7 +78,8 @@ angles_deg = np.degrees(angles_rad)
 print(f"  L_px: {L_px} px")
 print(f"  Displacements (px): {x_displacements}")
 print(f"  Angles (deg):      {angles_deg.round(2)}")
-assert abs(angles_deg[0] - angles_deg[-1]) < 0.01  # Symmetry check
+assert abs(angles_deg[0] + angles_deg[-1]) < 0.01  # Symmetry check
+
 print("  ✓ Angle conversion formula validated")
 
 # Test 4: Savitzky-Golay filtering
@@ -163,3 +174,134 @@ print("  • Fitting: A·exp(-βt) with full uncertainty propagation")
 print("  • Filter: Adaptive Savitzky-Golay window based on period")
 print("  • Metadata: Factorial design tracking (exp_id, length, area_condition)")
 print("\n" + "=" * 70)
+
+# Interactive Mode Selection
+print("\n" + "=" * 70)
+print("INTERACTIVE MODE SELECTION")
+print("=" * 70)
+
+parser = argparse.ArgumentParser(description="Pendulum Tracking Integration Test")
+parser.add_argument("--mode", type=str, default="validate", 
+                    choices=["validate", "live", "video"],
+                    help="Execution mode: validate (tests only), live (webcam), video (video file)")
+parser.add_argument("--video", type=str, default="", 
+                    help="Path to video file (required for --mode video)")
+parser.add_argument("--experiment", type=int, default=1, 
+                    choices=[1, 2, 3, 4],
+                    help="Experiment ID (1-4) for live/video tracking")
+parser.add_argument("--output-dir", type=str, default="./tracking_output", 
+                    help="Output directory for tracking results")
+
+args = parser.parse_args()
+
+# Create output directory if it doesn't exist
+os.makedirs(args.output_dir, exist_ok=True)
+
+if args.mode == "live":
+    print("\n[MODE] Starting Live Tracking with Webcam")
+    print("=" * 70)
+    try:
+        from liveTrack import live_track
+        
+        # Get experiment configuration
+        config = get_experiment_config(args.experiment)
+        hilo_length = config['hilo_length_cm']
+        area_cond = config['area_condition']
+        
+        print(f"✓ Experiment {args.experiment}: {config['name']}")
+        print(f"  • Hilo Length: {hilo_length} cm")
+        print(f"  • Area Condition: {area_cond}")
+        print(f"\nInstructions:")
+        print("  1. A window will open showing your webcam")
+        print("  2. Click to select the equilibrium point (support point)")
+        print("  3. Then select the object to track (drag a rectangle)")
+        print("  4. The tracking will begin automatically")
+        print("  5. Press 'q' to stop tracking and save data")
+        print("\n" + "-" * 70)
+        
+        # Initialize OpenCV tracker (using KCF)
+        try:
+            tracker = cv2.TrackerKCF_create()
+        except AttributeError:
+            tracker = cv2.legacy.TrackerKCF_create()
+        
+        # Run live tracking
+        results = live_track(tracker, video_src=0, hilo_length_cm=hilo_length, 
+                           area_condition=area_cond, output_dir=args.output_dir)
+        
+        if results[0] is not None:
+            print("\n✓ Live tracking completed successfully!")
+            print(f"  Data saved to: {args.output_dir}")
+        else:
+            print("\n⚠ No data was captured during tracking")
+        
+    except Exception as e:
+        print(f"\n✗ Live tracking failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+elif args.mode == "video":
+    print("\n[MODE] Processing Video File")
+    print("=" * 70)
+    
+    if not args.video or not os.path.exists(args.video):
+        print(f"✗ Video file not found: {args.video}")
+        print("\nUsage: python test_integration.py --mode video --video <VIDEO_PATH>")
+        sys.exit(1)
+    
+    try:
+        from tracker import process_video
+        
+        # Get experiment configuration
+        config = get_experiment_config(args.experiment)
+        hilo_length = config['hilo_length_cm']
+        area_cond = config['area_condition']
+        
+        print(f"✓ Experiment {args.experiment}: {config['name']}")
+        print(f"  • Video: {args.video}")
+        print(f"  • Hilo Length: {hilo_length} cm")
+        print(f"  • Area Condition: {area_cond}")
+        print(f"\nInstructions:")
+        print("  1. A window will open showing the video")
+        print("  2. Click to select the equilibrium point (support point)")
+        print("  3. Click and drag to select the object to track")
+        print("  4. Tracking will process the entire video")
+        print("\n" + "-" * 70)
+        
+        # Generate output CSV path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_output = os.path.join(args.output_dir, 
+                                 f"tracking_exp{args.experiment}_{timestamp}.csv")
+        
+        # Initialize OpenCV tracker
+        try:
+            tracker = cv2.TrackerKCF_create()
+        except AttributeError:
+            tracker = cv2.legacy.TrackerKCF_create()
+        
+        # Process video
+        process_video(tracker, args.video, csv_output, ret=True, 
+                     hilo_length_cm=hilo_length, area_condition=area_cond)
+        
+        print(f"\n✓ Video processing completed successfully!")
+        print(f"  Data saved to: {csv_output}")
+        
+    except Exception as e:
+        print(f"\n✗ Video processing failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+elif args.mode == "validate":
+    print("\n[MODE] Running Validation Tests Only")
+    print("=" * 70)
+    print("✓ All validation tests completed successfully!")
+    print("\nFor live tracking:")
+    print("  python test_integration.py --mode live --experiment 1")
+    print("\nFor video processing:")
+    print("  python test_integration.py --mode video --video <VIDEO_PATH> --experiment 1")
+
+print("\n" + "=" * 70)
+print("SESSION COMPLETED")
+print("=" * 70)
