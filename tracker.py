@@ -7,6 +7,48 @@ import os
 
 from plotting import plot_angle, fit_amplitude, binning, amplitude_decay
 
+
+def _create_tracker(name):
+    """Create an OpenCV tracker instance by name."""
+    name = name.upper()
+    if name == "CSRT":
+        try:
+            return cv2.legacy.TrackerCSRT_create()
+        except AttributeError:
+            return cv2.TrackerCSRT_create()
+    if name == "KCF":
+        try:
+            return cv2.legacy.TrackerKCF_create()
+        except AttributeError:
+            return cv2.TrackerKCF_create()
+    if name == "BOOSTING":
+        try:
+            return cv2.legacy.TrackerBoosting_create()
+        except AttributeError:
+            return cv2.TrackerBoosting_create()
+    if name == "MIL":
+        try:
+            return cv2.legacy.TrackerMIL_create()
+        except AttributeError:
+            return cv2.TrackerMIL_create()
+    if name == "TLD":
+        try:
+            return cv2.legacy.TrackerTLD_create()
+        except AttributeError:
+            return cv2.TrackerTLD_create()
+    if name == "MEDIANFLOW":
+        try:
+            return cv2.legacy.TrackerMedianFlow_create()
+        except AttributeError:
+            return cv2.TrackerMedianFlow_create()
+    if name == "MOSSE":
+        try:
+            return cv2.legacy.TrackerMOSSE_create()
+        except AttributeError:
+            return cv2.TrackerMOSSE_create()
+    raise ValueError(f"Unknown tracker name: {name}")
+
+
 def process_video(tracker, video_path, csv_path, ret=False, hilo_length_cm=30, area_condition="sin_hojas"):
     """
     Process a video to track an object and log its position and angle over time.
@@ -80,8 +122,13 @@ def process_video(tracker, video_path, csv_path, ret=False, hilo_length_cm=30, a
         L_px = 100  # Default fallback
 
     # Initialize tracker with first frame and bounding box
-    global trackers
-    cvtracker = trackers[tracker]()
+    if isinstance(tracker, str):
+        cvtracker = _create_tracker(tracker)
+    elif hasattr(tracker, 'init') and hasattr(tracker, 'update'):
+        cvtracker = tracker
+    else:
+        raise TypeError("tracker must be a tracker object or a tracker name string")
+
     ok = cvtracker.init(frame, bounding_box)
 
     position_log = []
@@ -287,17 +334,6 @@ if __name__ == "__main__":
 
     if not os.path.isdir(args.source):
         raise NotADirectoryError(f"'{args.source}' is not a valid directory.")
-
-    global trackers
-    trackers = {
-        "CSRT": cv2.legacy.TrackerCSRT_create,
-		"KCF": cv2.legacy.TrackerKCF_create,
-		"BOOSTING": cv2.legacy.TrackerBoosting_create,
-		"MIL": cv2.legacy.TrackerMIL_create,
-		"TLD": cv2.legacy.TrackerTLD_create,
-		"MEDIANFLOW": cv2.legacy.TrackerMedianFlow_create,
-		"MOSSE": cv2.legacy.TrackerMOSSE_create
-    }
 
     ret = True if args.multi_trials == "True" else False
 

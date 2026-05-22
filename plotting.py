@@ -63,7 +63,7 @@ def binning(trials, max_time, bin_size=1):
 
     # Apply the mask to filter out the NaN values from both arrays
     mean_amplitudes = mean_amplitudes[valid_mask]
-    uncertainty_mean = std_amplitudes[valid_mask]
+    uncertainty_mean = uncertainty_mean[valid_mask]
 
     # Calculate bin centers for plotting
     bin_centers = bins[:-1] + bin_size / 2

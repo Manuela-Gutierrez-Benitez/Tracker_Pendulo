@@ -23,14 +23,16 @@ def live_track(tracker, video_src, hilo_length_cm=30, area_condition="sin_hojas"
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
-    roi = detect_object()
+    video_source = int(video_src) if isinstance(video_src, str) and video_src.isdigit() else video_src
+    roi = detect_object(video_source)
+    if roi is None:
+        raise RuntimeError("ROI detection failed or was cancelled.")
 
-    cap = cv2.VideoCapture(int(video_src) if isinstance(video_src, str) and video_src.isdigit() else video_src)
+    cap = cv2.VideoCapture(video_source)
 
     # Exit if video not opened.
     if not cap.isOpened():
-        print("Could not open video")
-        sys.exit()
+        raise RuntimeError("Could not open video source for tracking.")
 
     # Before starting the tracking, let the user pick a equilibrium point as origin
     origin = None
@@ -86,6 +88,9 @@ def live_track(tracker, video_src, hilo_length_cm=30, area_condition="sin_hojas"
     print(f"   ROI: {roi}")
     print("-" * 70)
 
+    cv2.namedWindow("Live Tracking", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Live Tracking", min(frame_width, 1000), min(frame_height, 700))
+
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -132,8 +137,6 @@ def live_track(tracker, video_src, hilo_length_cm=30, area_condition="sin_hojas"
             cv2.putText(frame, "Tracking failure detected", (100, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)
             
         # Display result
-        cv2.namedWindow("Live Tracking", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Live Tracking", min(frame_width, 1000), min(frame_height, 700))
         cv2.imshow("Live Tracking", frame)
 
         # Exit if 'q' pressed

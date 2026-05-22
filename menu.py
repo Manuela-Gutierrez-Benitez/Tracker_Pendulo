@@ -37,9 +37,9 @@ def run_live_tracking():
     print("\nAvailable Experiments:")
     experiments = {
         1: ("30 cm", "sin_hojas", "Experiment 1 - 30cm without leaves"),
-        2: ("30 cm", "con_hojas", "Experiment 2 - 30cm with leaves"),
-        3: ("40 cm", "sin_hojas", "Experiment 3 - 40cm without leaves"),
-        4: ("40 cm", "con_hojas", "Experiment 4 - 40cm with leaves"),
+        2: ("60 cm", "sin_hojas", "Experiment 2 - 60cm without leaves"),
+        3: ("30 cm", "con_hojas", "Experiment 3 - 30cm with leaves"),
+        4: ("60 cm", "con_hojas", "Experiment 4 - 60cm with leaves"),
     }
     
     for num, (length, condition, desc) in experiments.items():

@@ -36,7 +36,7 @@ def detect_by_color(frame, lower_color, upper_color):
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         
         # Return the bounding box as the region of interest (ROI)
-        return (x, y, x + w, y + h), frame
+        return (x, y, w, h), frame
 
     return None, frame  # No washer detected, return None
 
@@ -66,7 +66,7 @@ def detect_circle(frame):
             cv2.rectangle(frame, (x - r, y - r), (x + r, y + r), (0, 128, 255), 2)  # Draw bounding box
             
             # Return the bounding box as the region of interest (ROI)
-            return (x - r, y - r, x + r, y + r), frame
+            return (x - r, y - r, 2 * r, 2 * r), frame
     
     return None, frame  # No washer detected, return None
 
@@ -85,17 +85,21 @@ def detect_object(video=0):
         tuple: The region of interest (ROI) where the object is detected, or None 
                if no object is detected.
     """
+    # Normalize video source for camera index strings
+    video_source = int(video) if isinstance(video, str) and video.isdigit() else video
+
     # Open the video capture (0 for default webcam, or provide video file path)
-    cap = cv2.VideoCapture(video)
+    cap = cv2.VideoCapture(video_source)
 
     if not cap.isOpened():
-        print("Error: Could not open video source.")
-        exit()
+        raise RuntimeError("Error: Could not open video source.")
 
     # Define the lower and upper bounds for the washer's color in HSV space
     # These values need to be fine-tuned based on the actual washer color
     lower_color = np.array([100, 150, 0])  # Example values (adjust these)
     upper_color = np.array([140, 255, 255])  # Example values (adjust these)
+
+    cv2.namedWindow("Detection", cv2.WINDOW_NORMAL)
 
     while True:
         ret, frame = cap.read()
@@ -107,19 +111,32 @@ def detect_object(video=0):
         roi, frame_with_bbox = detect_by_color(frame, lower_color, upper_color)
         if roi is not None:
             cv2.putText(frame_with_bbox, f"Washer detected at: {roi}", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 1.5,(0,0,255),2)
+        else:
+            cv2.putText(frame_with_bbox, "No auto-detection. Press Enter to select ROI manually or Q to quit.",
+                        (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
         # Display the frame with the bounding box (if detected)
         frame_height, frame_width = frame_with_bbox.shape[:2]
-        cv2.namedWindow("Detection", cv2.WINDOW_NORMAL)
         cv2.resizeWindow("Detection", min(frame_width, 800), min(frame_height, 600))  # Limit window size
         cv2.imshow('Detection', frame_with_bbox)
 
-        # Exit the loop when 'Enter' is pressed
-        if cv2.waitKey(1) & 0xFF == 13:
-            # Release the video capture object and close all OpenCV windows
+        key = cv2.waitKey(1) & 0xFF
+        if key == 13:
             cap.release()
             cv2.destroyAllWindows()
+            if roi is None:
+                print("No object was automatically detected. Please select the object manually.")
+                cv2.namedWindow("Select Object", cv2.WINDOW_NORMAL)
+                manual_roi = cv2.selectROI("Select Object", frame, fromCenter=False, showCrosshair=True)
+                cv2.destroyAllWindows()
+                if manual_roi and sum(manual_roi) > 0:
+                    return tuple(map(int, manual_roi))
+                return None
             return roi
+        elif key == ord('q'):
+            cap.release()
+            cv2.destroyAllWindows()
+            return None
         
 if __name__ == "__main__":
     roi = detect_object()
